@@ -2,6 +2,7 @@
 轻量级xlua热更框架
 
 1、Lua创建和遍历泛型列表示例
+
 	local helper = require 'common.helper'
 	local testList = helper.new_list(typeof(CS.System.String))
 	testList:Add('111')
@@ -22,7 +23,9 @@
 		print('testList', i, v)
 	end
 
+
 2、Lua创建和遍历泛型字典示例
+
 	local helper = require 'common.helper'
 	local testDic = helper.new_dictionary(typeof(CS.System.Int32), typeof(CS.System.String))
 	testDic:Add(111, 'aaa')
@@ -43,7 +46,9 @@
 		print('testDic', i, v)
 	end
 	
+	
 3、添加消息示例
+
 	---------------------------------消息系统热更测试---------------------------------
 	-- 用法一：使用cs侧函数作为回调，必须在XLuaMessenger导出，无法新增消息监听，不支持重载函数
 	messenger.add_listener(CS.MessageName.MN_ARENA_PERSONAL_PANEL, self, self.UpdatePanelInfo)
@@ -70,7 +75,9 @@
 		print('LuaDelegateTest: ', self, param, param and param.Count)
 	end
 	
+	
 4、移除消息示例
+
 	-- 用法一
 	messenger.remove_listener(CS.MessageName.MN_ARENA_PERSONAL_PANEL, self, self.UpdatePanelInfo)
 	messenger.remove_listener(CS.MessageName.MN_RESET_RIVAL, self, self.UpdateRivalInfo)
@@ -86,7 +93,9 @@
 	messenger.remove_listener(CS.MessageName.MN_ARENA_BOX, self, 'SetBoxState', typeof(CS.System.Int32))
 	messenger.remove_listener(CS.MessageName.MN_ARENA_CLEARDATA, self, 'ClearData')
 
+
 5、发送消息示例
+
 	util.hotfix_ex(CS.UIArena, 'OnGUI', function(self)
 		if Button(Rect(100, 300, 150, 80), 'lua BroadcastMsg1') then
 			local testData = CS.ArenaPanelData()--正确
@@ -115,7 +124,9 @@
 		self:OnGUI()
 	end)
 	
+	
 6、扩展方法示例
+
 	-- 说明：静态函数调用使用'.'，成员函数调用使用':'
 	local iconPrefab = CS.ResourceMgr.instance:LoadUIPrefab(CS.TheGameIds.PLAYER_ICON_ITEM)
 	if iconPrefab ~= nil then
@@ -130,7 +141,9 @@
 		end
 	end
 	
+	
 7、回调热更示例（消息系统的回调除外）
+
 	--	1、缓存委托
 	--  2、Lua绑定（实际上是创建LuaFunction再cast到delegate），需要在委托类型上打[CSharpCallLua]标签--推荐
 	--	3、使用反射再执行Lua绑定
@@ -167,7 +180,9 @@
 		local callbackInfo = CS.GameObjectPool.CallbackInfo(callback3, item, Vector3.zero, Vector3.one * 0.65, self.m_awardGrid.gameObject)
 		CS.UIGameObjectPool.instance:GetGameObject(CS.ResourceMgr.RESTYPE.UI, CS.TheGameIds.UI_BAG_ITEM_ICON, callbackInfo)
 	
+	
 8、协程热更示例
+
 	xlua.hotfix(CS.UIRankMain, 'Open', function(self, param, pathData)
 		-- 方式一：新建Lua协程，优点：可新增协程；缺点：使用起来麻烦
 		print('----------async call----------')
@@ -178,7 +193,9 @@
 		self:StartCoroutine(self:TestCorotine(3))
 	end)
 	
+	
 9、cs侧协程热更示例
+
 	xlua.hotfix(CS.UIRankMain, 'TestCorotine', function(self, seconds)
 		print('HOTFIX:TestCorotine ', self, seconds)
 		--注意：这里定义的匿名函数是无参的，全部参数以闭包方式传入
@@ -192,7 +209,9 @@
 		end)
 	end)
 	
+	
 10、lua侧新建协程示例：本质上是在Lua侧建立协程，然后用异步回调驱动，
+
 	local corotineTest = function(self, seconds)
 		print('NewCoroutine: lua corotineTest', self)
 		
