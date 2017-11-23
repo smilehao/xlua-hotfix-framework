@@ -1,0 +1,176 @@
+-- by wsh for test @ 2017-09-14
+-- 说明：xlua热更示例
+
+-- 说明：lua库
+local util = require 'common.util'
+local helper = require 'common.helper'
+local messenger = require 'common.messenger'
+local yield_return = (require 'common.cs_coroutine').yield_return
+
+-- 说明，用局部缓存可以提高函数访问效率,还能提高代码可读性
+local Vector3 = CS.UnityEngine.Vector3
+
+xlua.private_accessible(CS.UIRankMain)
+xlua.private_accessible(CS.BaseUI)
+
+-- 模拟Lua侧的异步回调
+local function lua_async_test(seconds, coroutine_break)
+    print('lua_async_test '..seconds..' seconds!')
+	-- TODO：这里还是用Unity的协程相关API模拟异步，有需要的话再考虑在Lua侧实现一个独立的协程系统
+	yield_return(CS.UnityEngine.WaitForSeconds(seconds))
+    coroutine_break(true, seconds)
+end
+
+-- lua侧新建协程：本质上是在Lua侧建立协程，然后用异步回调驱动，
+local corotineTest = function(self, seconds)
+	print('NewCoroutine: lua corotineTest', self)
+	
+	local s = os.time()
+	print('coroutine start1 : ', s)
+	-- 使用Unity的协程相关API：实际上也是CS侧协程结束时调用回调，驱动Lua侧协程继续往下跑
+	-- 注意：这里会在CS.CorotineRunner新建一个协程用来等待3秒，这个协程是和self没有任何关系的
+	yield_return(CS.UnityEngine.WaitForSeconds(seconds))
+	print('coroutine end1 : ', os.time())
+	print('This message1 appears after '..os.time() - s..' seconds in lua!')
+	
+	local s = os.time()
+	print('coroutine start2 : ', s)
+	-- 使用异步回调转同步调用模拟yield return
+	-- 这里使用cs侧的函数也是可以的，规则一致：最后一个参数必须是一个回调，回调被调用时表示异步操作结束
+	-- 注意：
+	--	1、如果使用cs侧函数，必须将最后一个参数的回调（cs侧定义为委托）导出到[CSharpCallLua]
+	--	2、用cs侧函数时，返回值也同样通过回调（cs侧定义为委托）参数传回
+	local boolRetValue, secondsRetValue = util.async_to_sync(lua_async_test)(seconds)
+	print('coroutine end2 : ', os.time())
+	print('This message2 appears after '..os.time() - s..' seconds in lua!')
+	-- 返回值测试
+	print('boolRetValue:', boolRetValue, 'secondsRetValue:', secondsRetValue)
+end
+
+-- 协程热更示例
+xlua.hotfix(CS.UIRankMain, 'Open', function(self, param, pathData)
+	print('HOTFIX:Open ', self)
+	
+    self:UIRankMain_BaseOpen(param, pathData)
+	
+    self:InitLbl()
+    self:OnBigTabChange(self.big_currTab)
+    self:OnTabChange(self.currTab)
+    self:InstantiatePrefab()
+    CS.Player.instance.rankMgr:ReqRankingList(self.currTab)
+	
+	-- 方式一：新建Lua协程，优点：可新增协程；缺点：使用起来麻烦
+	print('----------async call----------')
+	util.coroutine_call(corotineTest)(self, 4)--相当于CS的StartCorotine，启动一个协程并立即返回
+	print('----------async call end----------')
+	
+	-- 方式二：沿用CS协程，优点：使用方便，可直接热更协程代码逻辑，缺点：不可以新增协程
+	self:StartCoroutine(self:TestCorotine(3))
+end)
+
+-- cs侧协程热更
+xlua.hotfix(CS.UIRankMain, 'TestCorotine', function(self, seconds)
+	print('HOTFIX:TestCorotine ', self, seconds)
+	--注意：这里定义的匿名函数是无参的，全部参数以闭包方式传入
+	return util.cs_generator(function()
+		local s = os.time()
+		print('coroutine start3 : ', s)
+		--注意：这里直接使用coroutine.yield，跑在self这个MonoBehaviour脚本中
+		coroutine.yield(CS.UnityEngine.WaitForSeconds(seconds))
+		print('coroutine end3 : ', os.time())
+		print('This message3 appears after '..os.time() - s..' seconds in lua!')
+	end)
+end)
+
+-- wrapContent回调热更示例
+xlua.hotfix(CS.UIRankMain, 'SetCallback', function(self)
+	print('HOTFIX:SetCallback ', self)
+	
+	self.wrapContent.onInitializeItem = util.bind(function(self, gameObject, wrapIndex, realIndex)
+		self:UpdateWrapItem(gameObject, wrapIndex, realIndex)
+	end, self)
+end)
+
+-- int.TryParse热更示例
+-- 安全热更方式示例
+helper.hotfix_safe(CS.UIRankMain, 'NguiOnClick', function(self, go)
+	print('HOTFIX:NguiOnClick ', self, go)
+	
+	local goName = go.name
+	if string.find(goName, 'bigTab') then
+		-- 说明：注意Lua的下标是以1开始的，两个数字start，end构成闭区间str[start,end]
+		local tab = tonumber(string.sub(goName, 7, 7))
+		if tab and tab ~= self.big_currTab then
+			self:OnBigTabChange(tab)
+			CS.Player.instance.rankMgr:ReqRankingList(self.big_currTab * 4)
+	
+			-- safe模式测试
+			--self:aaaaaaaaaa()--此处触发异常后，不影响游戏正常运行，只是这次更新作废
+		end
+	elseif string.find(goName, 'tab') then
+		local tab = tonumber(string.sub(goName, 4, 4))
+		if tab and tab ~= self.currTab then
+			self:OnTabChange(tab)
+			CS.Player.instance.rankMgr:ReqRankingList(self.currTab)
+		end
+	end
+	
+	self:UIRankMain_BaseNguiOnClick(go)
+end)
+
+-- 复杂热更错误处理示例
+helper.hotfix_safe(CS.UIRankMain, 'UpdateOwnList', function(self, rankType)
+	print('HOTFIX:UpdateOwnList ', self, rankType)
+	
+	self.noGuildState:SetActive(false)
+	self.haveGuildState:SetActive(true)
+	local rank_data = helper.try_get_value(CS.Player.instance.rankMgr.rankDataDict, rankType)
+	if not rank_data then
+		return
+	end
+	
+	self:Relese()
+	self.playerItem:SetActive(true)
+	self:ShowRankValueType(rank_data.rank)
+	
+	self.flagSp.gameObject:SetActive(false)
+	self.playerSp.gameObject:SetActive(false)
+	
+	local callback = util.bind(function(self, go, param)
+		-- 这里有个很蛋疼的问题，param是数字，从Lua到cs时，由于xlua判断参数是object类型，就传了long类型，导致cs中的语句int id = (int)param1转换失败
+		-- 解决方式一：cs侧所有的类型强转使用Convert
+		-- 解决方式二：遇到了这种情况的，整个函数热更
+		-- self:OnIconLoad(go, param) --在cs侧改为Convert类型强转后可用
+		--下面重写整个逻辑--或者直接热更OnIconLoad函数，也是一样的
+		if not go then 
+			return
+		end
+	
+		-- safe模式测试
+		--self:aaaaaaaaaa()--此处触发异常后，不影响游戏正常运行，只是这次更新作废
+		
+		self.m_iconItem = go:AddMissingComponent(typeof(CS.UserIconItem))
+		self.m_iconItem:SetIcon(param)
+	end, self)
+	
+	local callbackInfo = CS.GameObjectPool.CallbackInfo(callback, rank_data.user_brief_info.use_icon, Vector3(-110, 0, 0), Vector3(0.9, 0.9, 0.9), self.haveGuildState)
+	CS.UIGameObjectPool.instance:GetGameObject(CS.ResourceMgr.RESTYPE.UI, CS.TheGameIds.PLAYER_ICON_ITEM, callbackInfo)
+	
+	self.playerNameLbl.text = rank_data.user_brief_info.name
+	local strArr = helper.split(CS.Language.instance:GetString(2506), ',')
+	-- 注意：lua的table下标以1开始
+	self.advanceLbl.text = strArr[self.currTab % 4 + 1]
+	self.advanceValueLbl.text = tostring(rank_data.score)
+	
+	local rankDataList = helper.try_get_value(CS.Player.instance.rankMgr.rankDataListDict, rankType)
+	if rankDataList == nil then
+		return
+	end
+	
+	self.m_rankDataList = rankDataList
+	self.itemGrid:Reposition()
+		
+	local count = self.m_rankDataList.Count
+	self.wrapContent:InitChildren(self.tempTransList, count)
+	self.wrapContent:RestToBeginning()
+end)

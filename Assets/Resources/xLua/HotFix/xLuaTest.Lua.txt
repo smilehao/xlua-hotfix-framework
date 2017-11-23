@@ -1,0 +1,58 @@
+-- by wsh for test @ 2017-08-26
+
+local Awake = function(self)
+	print('Awake running...')
+end;
+	
+xlua.hotfix(CS.HotfixTest, {
+    
+	['.ctor'] = function(csobj)
+		print('.ctor running...')
+		Awake(csobj)
+		return {csobj = csobj, start = false, tick = 0}
+    end;
+
+	Update = function(self)
+		if not self then
+			return
+		end
+		
+		self.tick = self.tick + 1
+		self.start = self.tick <= 100
+		if self.start == false then return end
+
+		local this = self.csobj;
+		this.tick = this.tick + 1
+		if (this.tick % 50) == 0 then
+			print('<<<<<<<<Update in lua, tick = ' .. this.tick)
+			this:TestCall()
+			if this.testClass ~= nil then
+				this.testClass:SetText('LUA TTick '..this.tick);
+				this.testClass:ShowTextValue()
+				this.testClass:TestProtectedFun()
+			end
+		end
+	end;
+	})
+
+xlua.private_accessible(CS.BaseClass)
+local util = require 'common.util'
+util.hotfix_ex(CS.DriveClass, 'SetText', function(self, textValue)
+--xlua.hotfix(CS.DriveClass, 'SetText', function(self, textValue)
+    textValue = textValue..'!!!'
+    print('<<<<<<<<SetText in lua, textValue = ' .. textValue)
+	self:SetText(textValue);--使用xlua.hotfix导致无限调用而卡死，使用util.hotfix_ex没有问题
+	--self.base:SetText(textValue)--无法通过base访问基类
+	--self.text.text = textValue--无法访问基类保护成员，设置private_accessible后可用
+	--self.TextCmp.text = textValue--可行，子类暴露公开接口
+	--local textCmp = self.transform:GetComponent("Text")
+	--if textCmp ~= nil then
+	--	textCmp.text = textValue--可行，获取组件并赋值
+	--else
+	--	print('textCmp nil!')
+	--end
+end)
+
+--说明：使用statefull必须先热更，后创建对象
+local gameobject = CS.UnityEngine.GameObject('xLuaTest')
+gameobject:AddComponent(typeof(CS.HotfixTest))

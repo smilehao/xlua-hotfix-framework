@@ -1,0 +1,21 @@
+-- by wsh for test @ 2017-08-31
+
+--xlua.private_accessible(CS.UIBattleShop)
+
+--除了CtlBattle在CS侧导出，其它全部使用反射
+xlua.hotfix(CS.UIBattleShop, 'UpgradeMaincity', function(self)
+	local ctlBattleInstance = CS.Battle.CtlBattle.instance;
+	print('ctlBattleInstance = ', ctlBattleInstance)
+	local battleLogic = ctlBattleInstance:GetBattleLogic()
+	if battleLogic ~= nil and battleLogic:CanBuildUpgrade() then
+		local selfPlayer = CS.Battle.PlayerManager.instance:GetSelfPlayer()
+		if selfPlayer ~= nil then
+			print('selfPlayer : ', selfPlayer:ToString())
+			local maincity = CS.Role.CharactorManager.instance:GetCharactor(selfPlayer.MaincityID)
+			if maincity ~= nil then
+				print('maincity : ', maincity:ToString())
+				ctlBattleInstance:GetMapLogic():TryBuildUpgrade(maincity:GetSmallNode(), selfPlayer)
+			end
+		end
+	end
+end)

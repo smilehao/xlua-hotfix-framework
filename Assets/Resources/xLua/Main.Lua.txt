@@ -1,0 +1,31 @@
+-- by wsh @ 2017-08-30
+
+-- 需要被加载的模块
+local modules = {
+	'Test.TestClosure',
+	'HotFix.xLuaTest'
+	--'HotFix.UIArenaTest',
+	--'HotFix.UIArenaTest',
+	--'HotFix.DragDropLineupItem',
+	--'HotFix.UIRankMainTest',
+}
+
+-- 支持重载的模块，调试用（修改lua代码可以不重启Unity编辑器），发布更新时清空
+local reloads = {
+	'HotFix.xLuaTest'
+	--'HotFix.UIArenaTest',
+	--'HotFix.DragDropLineupItem',
+	--'HotFix.UIRankMainTest',
+}
+
+-- 先卸载模块
+for i,v in ipairs(reloads) do
+	package.loaded[v] = nil
+end
+
+-- 再加载/重加载模块
+for i,v in ipairs(modules) do
+	if package.loaded[v] == nil then
+		require(v)
+	end
+end

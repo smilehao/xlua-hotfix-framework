@@ -1,0 +1,18 @@
+--DragDropLineupItem
+
+local util = require 'common.util'
+local helper = require 'common.helper'
+local messenger = require 'common.messenger'
+
+xlua.private_accessible(CS.DragDropLineupItem)
+
+util.hotfix_ex(CS.DragDropLineupItem, 'OnDragDropRelease', function(self, surface)
+	
+	if CS.UIManager.Instance():WindowIsOpen(CS.TheUIPrefabIds.UI_LINEUP_MAIN) == false then
+		CS.UnityEngine.GameObject.Destroy(self.gameObject)
+		do return end
+	end
+	
+	self:OnDragDropRelease(surface)
+	print('DragDropLineupItem done')
+end)

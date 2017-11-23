@@ -1,0 +1,56 @@
+-- by wsh for closure test @ 2017-09-01
+
+local util = require 'common.util'
+local yield_return = (require 'common.cs_coroutine').yield_return
+
+local coTable;
+local CreateClosure = function()
+	-- 闭包测试
+	local testTable = {'3333', '4444', '5555'}
+	for v = 3, 1, -1 do
+		local co = util.coroutine_call(function(cb)
+			local s = os.time()
+			print('coroutine start : ', s)
+			yield_return(CS.UnityEngine.WaitForSeconds(v))
+			print('wait interval:', os.time() - s)
+			print('testTable', v, testTable[v])
+			print('coroutine end : ', os.time())
+			cb()
+		end)
+		coTable = {next = coTable, call = co}
+	end
+end
+
+local TestCall = util.coroutine_call(function()
+	CreateClosure()
+	local coSync = coTable
+	local coAsync = coTable
+	print('----------sync call----------')
+	while coSync ~= nil do
+		-- 异步转同步
+		local syncCall = util.async_to_sync(coSync.call)
+		syncCall()
+		coSync = coSync.next
+	end
+	print('----------async call----------')
+	while coAsync ~= nil do
+		-- 异步调用
+		coAsync.call()
+		coAsync = coAsync.next
+	end
+end)
+
+local waiting = util.coroutine_call(function()
+	print('TestClosure waiting 5 second...')
+	local co = util.coroutine_call(function(cb)
+		yield_return(CS.UnityEngine.WaitForSeconds(5))
+		cb()
+	end)
+	util.async_to_sync(co)()--启动另外一个协程，并等待，类似cs中的yiled return
+	print('TestClosure start...')
+	TestCall()
+	print('TestClosure finish...')
+end)
+
+waiting()--启动一个协程
+print('TestClosure script end!')
