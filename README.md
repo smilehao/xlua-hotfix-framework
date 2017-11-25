@@ -1,5 +1,6 @@
 # xlua-framework
-轻量级xlua热更框架
+轻量级xlua热修复框架 
+博客： http://www.cnblogs.com/SChivas/p/7893048.html
 
 1、Lua创建和遍历泛型列表示例
 
